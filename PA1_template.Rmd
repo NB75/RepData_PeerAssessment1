@@ -1,25 +1,132 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
+title: Reproducible Research - Peer Assessment 1
+output:
   html_document:
-    keep_md: true
+    toc: true
+    toc_depth: 3
+    theme: journal
 ---
 
+Aim of this document is to answer questions on data about Personal Activity collected in Nov and Dec, 2012
 
-## Loading and preprocessing the data
+```{r setup, cache=FALSE, include=FALSE}  
+library(knitr)  
+opts_chunk$set(fig.path='figure/')  
+```
 
+##Preliminary: Loading and preprocessing data  
+Following chunk of code loads and preprocess data from file 'activity.csv'
+```{r loads and preprocess, echo=TRUE}
 
+if(!(file.exists("activity.csv") )) { 
+        filename <- "repdata-data-activity.zip"
+        if(!file.exists(filename)) {
+                fileURL <- "http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+                path <- getwd()
+                dest <- paste(path,filename,sep="/")
+                download.file(url=fileURL,destfile=dest,method="auto")
+        }  
+        unzip(filename) 
+}
 
-## What is mean total number of steps taken per day?
+df <- read.csv("activity.csv",colClasses=c("numeric","character","numeric"))
 
+```
+  
+##Question #1: What is mean total number of steps taken per day?  
+Answer is searched for performing the following steps:  
+1. activity data is aggregated per day  
+2. a histogram is created with data of steps per day  
+3. mean and median of steps per day are calculated  
+```{r step mean, echo=TRUE}
 
+  day_df <- data.frame(aggregate(df[,1],by=list(df$date),FUN=sum,na.rm=TRUE))
+  day_df_names <- c("day","steps")
+  day_df <- setNames(day_df,day_df_names)
+  hist(day_df$steps,breaks=10,xlab="Number of steps per day",main="Distribution of Steps Number per day")
+ 
+  mean(day_df$steps,na.rm=TRUE)
+  median(day_df$steps,na.rm=TRUE)
 
-## What is the average daily activity pattern?
+```
+  
+##Question #2: What is the average daily activity pattern?  
+Answer is searched for performing the following steps:   
+1. activity data is aggregated per 5-minute interval  
+2. a plot type line is created to show the pattern
+```{r daily activity pattern, echo=TRUE}
 
+  int_df <- data.frame(aggregate(df[,1],by=list(df$interval),FUN=mean,na.rm=TRUE))
+  int_df_names <- c("interval","steps")
+  int_df <- setNames(int_df,int_df_names)
 
+  xmax <- nrow(int_df)
+  xint <- c(0,xmax)  
 
-## Imputing missing values
+  ymax <- max(int_df$steps)
+  yint <- c(0,ymax)
 
+  xlab <- c(0:24)
+  xlat <- seq(from=0,to=xmax,by=xmax/24)
 
+  plot(1,type="n",xlab="Daily Hour",ylab="Avg number of steps",main="Avg number of steps per 5-min interval",xlim=xint,ylim=yint,xaxt="n")
+  lines(int_df$steps)
+  axis(1,labels=xlab,at=xlat)
 
-## Are there differences in activity patterns between weekdays and weekends?
+```
+
+##Question #3: Imputing missing values  
+Answer is searched for performing the following steps:   
+1. creating a new data frame called "clean_df" where NA are replaced with means per interval
+2. aggregating data of clean_df per day, and then creating histogram and calculating mean and median
+```{r missing values, echo=TRUE}
+
+  null <- sum(is.na(df$steps))
+  print(null)
+
+  library(dplyr)  
+
+  # replacement of NA with mean per interval: creation of clean_df
+  new_df <- merge(df,int_df,by.x="interval",by.y="interval")
+  clean_steps <- new_df$steps.x
+  clean_steps[is.na(clean_steps)] <- 0
+  rep_steps <- as.numeric(is.na(new_df$steps.x))*new_df$steps.y + as.numeric(complete.cases(new_df$steps.x))*clean_steps
+  clean_df <- data.frame(rep_steps,new_df$date,new_df$interval)
+  clean_df <- setNames(clean_df,c("steps","date","interval"))
+  clean_df <- arrange(clean_df,date)
+  
+  #aggregation of clean_df per day, creation of histogram, calculation of mean and median
+  new_day_df <- data.frame(aggregate(clean_df[,1],by=list(clean_df$date),FUN=sum,na.rm=TRUE))
+  new_day_df_names <- c("day","steps")
+  new_day_df <- setNames(new_day_df,new_day_df_names)
+  hist(new_day_df$steps,breaks=10,xlab="Number of steps per day",main="Distribution of Steps Number per day")
+ 
+  mean(new_day_df$steps,na.rm=TRUE)
+  median(new_day_df$steps,na.rm=TRUE)
+  
+```
+
+##Question #4: Patterns in weekdays and weekends  
+Answer is searched for performing the following steps:   
+1. new factor variable called "weekfactor" is added to "clean_df" ("final_df" is created)  
+2. "final_df" is aggregated by interval and weekfactor (mean of steps is calculated)  
+3. plot is created  
+```{r weekdays, echo=TRUE}
+
+  #creation of new variable
+  final_df <- mutate(clean_df,weekfactor=ifelse(as.POSIXlt(df$date)$wday==0|as.POSIXlt(df$date)$wday==6,"weekend","weekday"))
+
+  #aggregation of data by 5-min interval and weekfactor
+  week_df <- data.frame(aggregate(final_df[,1],by=list(final_df$interval,final_df$weekfactor),FUN=mean,na.rm=TRUE))
+  week_df_names <- c("interval","weekfactor","steps")
+  week_df <- setNames(week_df,week_df_names)
+  
+  #creation of the plot
+  library(ggplot2)
+
+  g <- ggplot(week_df,aes(interval, steps))
+  g <- g + geom_line() + facet_grid(weekfactor ~ .) + ggtitle("Avg number of steps per time interval in weekdays and weekend")
+  print(g)
+
+  
+```
